@@ -13,12 +13,14 @@
 1. Confirm preflight (`gh auth status`, `git switch main`, `git pull --ff-only`, clean working tree).
 2. List open PRs excluding deferred queue labels.
 3. Detect overlapping files, split candidates, and mergeability risk.
-4. For each PR, decide if branch splitting is needed to restore coherent scope.
-5. Check commit-message conformance and identify rewrite operations required before merge.
-6. Explicitly call out any planned force-push operations required by rebase or commit rewrite.
-7. Score PRs using deterministic model and tie-breakers.
-8. Build dry-run commands.
-9. Write artefacts:
+4. Classify each PR as `CLEAN`, `DIRTY`, or `BLOCKED`.
+5. For each `DIRTY` PR, add rebase-on-`origin/main` before-merge commands to the plan.
+6. For each PR, decide if branch splitting is needed to restore coherent scope.
+7. Check commit-message conformance and identify rewrite operations required before merge.
+8. Explicitly call out any planned force-push operations required by rebase or commit rewrite.
+9. Score PRs using deterministic model and tie-breakers.
+10. Build dry-run commands.
+11. Write artefacts:
    - `docs/integration-runs/<date>-<batch>-action-plan.md`
    - `docs/integration-runs/<date>-<batch>-action-plan.json`
    - initialise `docs/integration-runs/<date>-<batch>-checkpoints.json`
