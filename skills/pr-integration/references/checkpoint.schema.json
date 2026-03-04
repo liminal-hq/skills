@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PR Integration Checkpoints",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "step_id",
+      "timestamp",
+      "mode",
+      "status",
+      "command"
+    ],
+    "properties": {
+      "step_id": { "type": "string", "minLength": 1 },
+      "timestamp": { "type": "string", "minLength": 1 },
+      "mode": {
+        "type": "string",
+        "enum": ["audit", "execute", "resume", "rollback"]
+      },
+      "pr_number": { "type": "integer", "minimum": 1 },
+      "command": { "type": "string", "minLength": 1 },
+      "status": {
+        "type": "string",
+        "enum": ["pending", "running", "passed", "failed", "rolled_back"]
+      },
+      "validation": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["command", "status"],
+          "properties": {
+            "command": { "type": "string", "minLength": 1 },
+            "status": {
+              "type": "string",
+              "enum": ["passed", "failed", "skipped"]
+            },
+            "output_excerpt": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "notes": { "type": "string" }
+    },
+    "additionalProperties": false
+  }
+}

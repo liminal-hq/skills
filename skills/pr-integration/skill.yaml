@@ -1,0 +1,56 @@
+name: pr-integration
+description: Review and integrate pull requests with audit and execute flows, conflict-aware ordering, validation gates, checkpointing, and rollback safeguards.
+version: 2.1.0
+owners:
+  - ScottMorris
+supported_agents:
+  - codex
+  - claude
+required_files:
+  - core/intent.md
+  - core/workflow.md
+  - core/guardrails.md
+  - adapters/codex/SKILL.md
+  - adapters/claude/CLAUDE.md
+  - references/action-plan-template.md
+  - references/checkpoint-format.md
+  - references/checkpoint.schema.json
+  - tests/smoke.md
+validation_commands:
+  - gh auth status
+  - git status --short --branch
+  - pnpm test
+  - pnpm build
+required_tools:
+  - gh
+  - git
+optional_tools:
+  - pnpm
+  - npm
+  - yarn
+  - jq
+  - rg
+artefact_paths:
+  - docs/integration-runs/<date>-<batch>-action-plan.md
+  - docs/integration-runs/<date>-<batch>-action-plan.json
+  - docs/integration-runs/<date>-<batch>-checkpoints.json
+  - docs/integration-runs/<date>-<batch>-final-report.md
+approval_requirements:
+  - explicit approval between audit and execute
+  - explicit push approval before remote updates
+scoring_weights:
+  security_fix: 100
+  bug_fix: 60
+  performance_change: 40
+  ux_enhancement: 30
+  documentation_only: 10
+  failing_ci: -80
+  overlap_risk: -20
+merge_policy:
+  branch_strategy: integration-branch
+  rebase_dirty_prs: true
+  commit_message_style: conventional-commit-with-body
+rollback_policy:
+  stop_on_gate_failure: true
+  revert_last_integration_commit: true
+  regenerate_plan_after_rollback: true
