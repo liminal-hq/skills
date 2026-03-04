@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import sys
@@ -62,7 +63,42 @@ def validate_skill_files(skill_dir: pathlib.Path, metadata: dict) -> None:
             raise ValidationError(f"{skill_name}: adapter directory missing for `{agent}`")
 
 
+def render_summary(results: list[dict], failures: list[str]) -> str:
+    lines: list[str] = []
+    lines.append("# Validate Skills Report")
+    lines.append("")
+    lines.append(f"- Skills checked: **{len(results)}**")
+    lines.append(f"- Failures: **{len(failures)}**")
+    lines.append("")
+    lines.append("| Skill | Version | Agents | Status |")
+    lines.append("| --- | --- | --- | --- |")
+    for result in results:
+        agents = ", ".join(result["agents"])
+        status = "PASS" if result["status"] == "pass" else "FAIL"
+        lines.append(f"| `{result['name']}` | `{result['version']}` | `{agents}` | {status} |")
+
+    if failures:
+        lines.append("")
+        lines.append("## Failures")
+        lines.append("")
+        for failure in failures:
+            lines.append(f"- {failure}")
+
+    return "\n".join(lines) + "\n"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate skill structure and metadata.")
+    parser.add_argument(
+        "--summary-file",
+        help="Write a markdown validation summary to this file path.",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
+
     if not SKILLS_DIR.exists():
         fail("skills directory not found")
 
@@ -75,17 +111,53 @@ def main() -> int:
     except (ValidationError, json.JSONDecodeError) as exc:
         fail(str(exc))
 
+    results: list[dict] = []
+    failures: list[str] = []
+
     for skill_dir in sorted(skill_dirs):
         metadata_path = skill_dir / "skill.yaml"
         if not metadata_path.exists():
-            fail(f"{skill_dir.name}: missing `skill.yaml`")
+            failures.append(f"{skill_dir.name}: missing `skill.yaml`")
+            results.append(
+                {
+                    "name": skill_dir.name,
+                    "version": "unknown",
+                    "agents": ["unknown"],
+                    "status": "fail",
+                }
+            )
+            continue
 
         try:
             metadata = load_metadata(metadata_path)
             validate_schema(skill_dir.name, metadata, schema)
             validate_skill_files(skill_dir, metadata)
+            results.append(
+                {
+                    "name": skill_dir.name,
+                    "version": str(metadata.get("version", "unknown")),
+                    "agents": list(metadata.get("supported_agents", [])) or ["unknown"],
+                    "status": "pass",
+                }
+            )
         except (ValidationError, json.JSONDecodeError, yaml.YAMLError) as exc:
-            fail(str(exc))
+            failures.append(str(exc))
+            results.append(
+                {
+                    "name": skill_dir.name,
+                    "version": "unknown",
+                    "agents": ["unknown"],
+                    "status": "fail",
+                }
+            )
+
+    if args.summary_file:
+        pathlib.Path(args.summary_file).write_text(render_summary(results, failures))
+
+    if failures:
+        for failure in failures:
+            print(f"ERROR: {failure}")
+        return 1
 
     print("All skills passed schema and structure validation.")
     return 0

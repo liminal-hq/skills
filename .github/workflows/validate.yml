@@ -16,4 +16,4 @@ jobs:
       - name: Install validation dependencies
         run: python3 -m pip install pyyaml jsonschema
       - name: Validate skill structure
-        run: python3 scripts/validate-skills.py
+        run: python3 scripts/validate-skills.py --summary-file "$GITHUB_STEP_SUMMARY"
