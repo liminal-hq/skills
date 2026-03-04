@@ -1,12 +1,16 @@
 name: pr-integration
 description: Review and integrate pull requests with audit and execute flows, conflict-aware ordering, validation gates, checkpointing, and rollback safeguards.
-version: 2.2.0
+version: 2.3.0
 owners:
   - ScottMorris
 supported_agents:
   - codex
   - claude
   - antigravity
+  - aider
+  - cursor
+  - cline
+  - gemini-cli
 required_files:
   - core/intent.md
   - core/workflow.md
@@ -14,6 +18,10 @@ required_files:
   - adapters/codex/SKILL.md
   - adapters/claude/CLAUDE.md
   - adapters/antigravity/ANTIGRAVITY.md
+  - adapters/aider/AIDER.md
+  - adapters/cursor/CURSOR.md
+  - adapters/cline/CLINE.md
+  - adapters/gemini-cli/GEMINI_CLI.md
   - references/action-plan-template.md
   - references/checkpoint-format.md
   - references/checkpoint.schema.json
