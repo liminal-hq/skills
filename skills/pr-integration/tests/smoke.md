@@ -19,3 +19,8 @@
 
 - Preconditions: interrupted execution with non-empty checkpoints artefact.
 - Expectation: `resume` continues from the first incomplete step and preserves prior records.
+
+## Scenario 5: Split and commit rewrite planning
+
+- Preconditions: one PR has overlap requiring split and non-conforming commit messages.
+- Expectation: `audit` artefact includes split plan, rewrite plan, and explicit force-push approval requirement before `execute`.

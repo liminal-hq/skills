@@ -117,6 +117,29 @@ For each open PR in the stack:
 2. If `DIRTY`, rebase branch onto `origin/main` before merge and rerun checks.
 3. Record conflict resolution notes for touched overlapping files.
 
+## Scope Coherence and Split Plan
+
+For each open PR in the stack:
+
+1. Scope coherence: `<coherent/split-needed>`
+2. If split is needed, define exactly which commits/files move to follow-up branch/PR.
+3. Record rationale for split and expected reduced overlap risk.
+
+## Commit Message Conformance and Rewrite Plan
+
+For each open PR in the stack:
+
+1. Commit format status: `<pass/fail>`
+2. If fail, define rewrite method (`rebase -i --reword` or equivalent).
+3. Record whether rewrite implies a force-push.
+
+## Force-Push Approval Plan
+
+List every planned force-push operation before execution:
+
+1. `#<number>` `<reason>` `<branch>` `<command>`
+2. Approval required: `<yes>`
+
 ## Merge Order Proposal
 
 1. `#<number>` `<why first>`
@@ -158,6 +181,8 @@ All must pass before `execute` mode:
 5. Plan approved by reviewer.
 6. Push approval explicitly granted by user.
 7. Audit started on `main`.
+8. Split plan approved for PRs marked `split-needed`.
+9. Force-push plan approved for all listed operations.
 
 ## Post-Merge Finalization
 
@@ -177,9 +202,12 @@ PR Title (#PRNo.)
 PR Description
 ```
 
+Preserve literal backticks in the message content.
+
 ## Commit Message Format (Required)
 
 Use Conventional Commits with bodies that explain what and why.
+When rewriting commit messages with backticks, use file-based input to prevent shell interpolation.
 
 ## Rollback Plan
 

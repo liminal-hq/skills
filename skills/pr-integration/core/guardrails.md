@@ -3,8 +3,10 @@
 ## Required Gates
 
 1. Preflight passes.
-2. Review standards pass (scope, regressions, security, docs impact).
+2. Review standards pass (scope coherence, regressions, security, docs impact).
 3. Validation commands pass for each integration step and at batch end.
+4. Commit-message conformance is verified, with rewrite plan approved when needed.
+5. Any force-push operations are predeclared in `audit` and explicitly approved.
 
 ## Safety Rules
 
@@ -16,6 +18,8 @@
   - `git cherry-pick`
 - Stop immediately on failed gate.
 - Keep internal triage details out of outward PR content.
+- Preserve literal backticks in merge/commit messages and PR text.
+- Use file-based message input when shell commands include backticks.
 
 ## Rollback
 
