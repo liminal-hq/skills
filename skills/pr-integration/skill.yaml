@@ -1,6 +1,6 @@
 name: pr-integration
 description: Review and integrate pull requests with audit and execute flows, conflict-aware ordering, validation gates, checkpointing, and rollback safeguards.
-version: 2.5.0
+version: 2.6.0
 owners:
   - ScottMorris
 supported_agents:
@@ -50,6 +50,8 @@ approval_requirements:
   - explicit push approval before remote updates
   - explicit approval for planned force-push operations
   - explicit approval for commit rewrite plan when needed
+  - explicit approval for label update plan before merge
+  - explicit approval for PR communication and final fate messaging plan
 scoring_weights:
   security_fix: 100
   bug_fix: 60
@@ -59,10 +61,17 @@ scoring_weights:
   failing_ci: -80
   overlap_risk: -20
 merge_policy:
-  branch_strategy: integration-branch
+  branch_strategy: integration/activity-description
+  branch_name_pattern: ^integration/[a-z0-9][a-z0-9-]*$
   rebase_dirty_prs: true
   commit_message_style: conventional-commit-with-body
 rollback_policy:
   stop_on_gate_failure: true
   revert_last_integration_commit: true
   regenerate_plan_after_rollback: true
+label_policy:
+  required_labels:
+    - name: changes-requested
+      description: Review feedback requested before merge
+    - name: manual-follow-up
+      description: Needs manual attention outside automated integration workflow
