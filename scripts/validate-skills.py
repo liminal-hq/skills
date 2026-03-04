@@ -14,6 +14,7 @@ from jsonschema import Draft202012Validator
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILLS_DIR = ROOT / "skills"
 SCHEMA_PATH = ROOT / "schemas" / "skill.schema.json"
+INDEX_PATH = SKILLS_DIR / "index.yaml"
 
 
 class ValidationError(Exception):
@@ -50,6 +51,10 @@ def validate_schema(skill_name: str, metadata: dict, schema: dict) -> None:
 def validate_skill_files(skill_dir: pathlib.Path, metadata: dict) -> None:
     skill_name = skill_dir.name
 
+    root_entrypoint = skill_dir / "SKILL.md"
+    if not root_entrypoint.exists():
+        raise ValidationError(f"{skill_name}: missing install entrypoint `SKILL.md`")
+
     required_files = metadata.get("required_files", [])
     for rel in required_files:
         path = skill_dir / rel
@@ -61,6 +66,62 @@ def validate_skill_files(skill_dir: pathlib.Path, metadata: dict) -> None:
         adapter_dir = skill_dir / "adapters" / agent
         if not adapter_dir.is_dir():
             raise ValidationError(f"{skill_name}: adapter directory missing for `{agent}`")
+
+
+def load_index() -> dict:
+    if not INDEX_PATH.exists():
+        raise ValidationError("skills index not found at `skills/index.yaml`")
+    data = yaml.safe_load(INDEX_PATH.read_text())
+    if not isinstance(data, dict):
+        raise ValidationError("`skills/index.yaml` must contain a mapping")
+    return data
+
+
+def validate_index(index_data: dict, discovered_skill_dirs: list[pathlib.Path], results: list[dict]) -> None:
+    entries = index_data.get("skills")
+    if not isinstance(entries, list):
+        raise ValidationError("`skills/index.yaml` must contain a `skills` list")
+
+    by_name = {result["name"]: result for result in results}
+    discovered = {skill_dir.name for skill_dir in discovered_skill_dirs}
+    indexed_names: set[str] = set()
+
+    for idx, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise ValidationError(f"`skills/index.yaml` entry {idx} must be a mapping")
+        for key in ("name", "path", "version", "supported_agents"):
+            if key not in entry:
+                raise ValidationError(f"`skills/index.yaml` entry {idx} missing `{key}`")
+
+        name = entry["name"]
+        if not isinstance(name, str) or not name:
+            raise ValidationError(f"`skills/index.yaml` entry {idx} has invalid `name`")
+        if name in indexed_names:
+            raise ValidationError(f"`skills/index.yaml` has duplicate skill name `{name}`")
+        indexed_names.add(name)
+
+        if name not in discovered:
+            raise ValidationError(f"`skills/index.yaml` lists unknown skill `{name}`")
+        expected_path = f"skills/{name}"
+        if entry["path"] != expected_path:
+            raise ValidationError(
+                f"`skills/index.yaml` entry `{name}` has path `{entry['path']}`; expected `{expected_path}`"
+            )
+
+        result = by_name.get(name)
+        if result and result["status"] == "pass":
+            if entry["version"] != result["version"]:
+                raise ValidationError(
+                    f"`skills/index.yaml` entry `{name}` version `{entry['version']}` does not match skill.yaml `{result['version']}`"
+                )
+            if sorted(entry["supported_agents"]) != sorted(result["agents"]):
+                raise ValidationError(
+                    f"`skills/index.yaml` entry `{name}` agents do not match `skill.yaml`"
+                )
+
+    missing_from_index = sorted(discovered - indexed_names)
+    if missing_from_index:
+        raise ValidationError(f"`skills/index.yaml` missing skills: {', '.join(missing_from_index)}")
 
 
 def render_summary(results: list[dict], failures: list[str]) -> str:
@@ -150,6 +211,13 @@ def main() -> int:
                     "status": "fail",
                 }
             )
+
+    if not failures:
+        try:
+            index_data = load_index()
+            validate_index(index_data, sorted(skill_dirs), results)
+        except (ValidationError, yaml.YAMLError) as exc:
+            failures.append(str(exc))
 
     if args.summary_file:
         pathlib.Path(args.summary_file).write_text(render_summary(results, failures))

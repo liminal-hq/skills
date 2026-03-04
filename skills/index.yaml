@@ -1,0 +1,12 @@
+skills:
+  - name: pr-integration
+    path: skills/pr-integration
+    version: 2.3.0
+    supported_agents:
+      - codex
+      - claude
+      - antigravity
+      - aider
+      - cursor
+      - cline
+      - gemini-cli

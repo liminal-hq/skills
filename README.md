@@ -19,11 +19,24 @@ Shared, multi-agent skills for Liminal HQ workflows.
 
 ## Install (Codex)
 
+### Full Skill (recommended)
+
+```bash
+python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo liminal-hq/skills \
+  --path skills/pr-integration \
+  --name pr-integration \
+  --method git
+```
+
+### Adapter Only (codex)
+
 ```bash
 python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
   --repo liminal-hq/skills \
   --path skills/pr-integration/adapters/codex \
-  --name pr-integration
+  --name pr-integration-codex \
+  --method git
 ```
 
 ## Conventions
@@ -31,3 +44,4 @@ python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-githu
 - `core/` is the source of truth.
 - Adapters must preserve core behaviour and safety gates.
 - Skill metadata lives in `skill.yaml` and must validate against `schemas/skill.schema.json`.
+- `skills/index.yaml` is the discovery index for installable skills and must stay in sync.
