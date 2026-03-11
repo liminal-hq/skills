@@ -59,3 +59,8 @@
 
 - Preconditions: PR is intentionally left outside automated processing for later human work.
 - Expectation: `manual-follow-up` label exists (description: `Needs manual attention outside automated integration workflow`) and PR receives next-step guidance comment.
+
+## Scenario 13: Emoji-prefixed PR titles
+
+- Preconditions: open PR stack includes titles such as `🎨🐀 Palette-Rat: [UX improvement]` and `🧱 Scurry: Cheese Collectible`.
+- Expectation: audit accepts the emoji prefix pattern when the first non-emoji word is capitalised and the title remains outcome-focused.
