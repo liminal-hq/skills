@@ -63,26 +63,38 @@ Continue or re-enter this loop when:
 ### Status check
 
 1. `gh pr checks <N>` for CI state.
-2. `gh api --paginate --slurp repos/:owner/:repo/issues/<N>/comments | jq 'add | .[-1]'`
-   for the latest top-level review comment (codex posts a summary comment per pass;
-   "Didn't find any major issues" or a 👍 reaction means clean). **Always pass
-   `--paginate`, and pipe through external `jq` rather than `gh api`'s own `--jq`** —
-   GitHub's REST API defaults to `per_page=30`/page 1 in ascending order, so on a PR
-   with more than 30 top-level comments an unpaginated call returns the 30th *oldest*
-   comment via `.[-1]`, not the latest one. `--paginate` alone doesn't fix this either:
-   `gh api`'s own `--jq` flag is documented to run once *per page*, not once over the
-   combined result, so `--paginate --jq '.[-1]'` across N pages prints N separate
-   "last comments," one per page — picking the wrong one (e.g. by reading only the
-   first line) silently treats a stale page-ending comment as current. `--slurp`
-   wraps every page into one array first; `gh api` forbids combining `--slurp` with
-   its own `--jq`, so aggregate with `--slurp` and filter with an external `jq`
-   instead, as shown above.
-3. `gh api --paginate --slurp repos/:owner/:repo/pulls/<N>/comments | jq 'add | .[] | select(.in_reply_to_id == null)'`
-   for unresolved inline findings — cross-check against replies already posted before
-   treating one as new. The `select(...)` filter itself is safe to run per-page (the
-   union of per-page filtered results is still correct, unlike a `.[-1]` index), but
-   use the same `--slurp` + external `jq` form for consistency and because some
-   downstream processing (counting, deduplication) may need the full combined array.
+2. `gh api --paginate --slurp repos/:owner/:repo/issues/<N>/comments | jq 'add | map(select(.user.login == "chatgpt-codex-connector[bot]")) | .[-1]'`
+   for the latest *codex* review summary (codex posts a summary comment per pass;
+   "Didn't find any major issues" or a 👍 reaction means clean). **Filter to the
+   codex bot's login before selecting `.[-1]`** — the issue-comments endpoint returns
+   every top-level PR conversation comment, not just codex's, so any later human
+   follow-up, status comment, or other bot's comment would otherwise be selected
+   instead, and the loop would miss codex's actual last verdict or stall reporting
+   the wrong state. **Always pass `--paginate`, and pipe through external `jq`
+   rather than `gh api`'s own `--jq`** — GitHub's REST API defaults to
+   `per_page=30`/page 1 in ascending order, so on a PR with more than 30 top-level
+   comments an unpaginated call returns the 30th *oldest* comment via `.[-1]`, not
+   the latest one. `--paginate` alone doesn't fix this either: `gh api`'s own `--jq`
+   flag is documented to run once *per page*, not once over the combined result, so
+   `--paginate --jq '.[-1]'` across N pages prints N separate "last comments," one
+   per page — picking the wrong one (e.g. by reading only the first line) silently
+   treats a stale page-ending comment as current. `--slurp` wraps every page into
+   one array first; `gh api` forbids combining `--slurp` with its own `--jq`, so
+   aggregate with `--slurp` and filter with an external `jq` instead, as shown above.
+3. `gh api --paginate --slurp repos/:owner/:repo/pulls/<N>/comments | jq 'add | (map(select(.in_reply_to_id != null)) | map(.in_reply_to_id)) as $repliedTo | map(select(.in_reply_to_id == null and (.id as $id | $repliedTo | index($id) == null)))'`
+   for genuinely unresolved inline findings: root review comments (`in_reply_to_id ==
+   null`) that have *no reply at all yet*. **Do not use `in_reply_to_id == null` by
+   itself as "unresolved"** — that only means the comment isn't itself a reply, not
+   that nobody has replied to it; once a finding has been fixed and replied to in
+   the same round, it is still a root comment forever and would keep being treated
+   as a blocker, preventing the loop from ever reaching "no unresolved threads."
+   GitHub's review-thread resolution state (`isResolved` via the GraphQL
+   `reviewThreads` field) is not a usable substitute either — confirmed empirically
+   on a real merged PR that every thread, including ones fixed, replied to, and
+   re-reviewed clean by codex, still read `isResolved: false`, because nobody in
+   this workflow ever clicks the "Resolve conversation" button; relying on it would
+   make every thread look permanently unresolved instead. The
+   "has-a-reply-yet" check above is what this skill actually means by "unresolved."
 4. `gh pr view <N> --json mergeable,mergeStateStatus` for merge state.
 
 If the latest top-level comment or inline comment author matches the bot's own GitHub
@@ -126,7 +138,23 @@ it is not new external feedback.
   replies. This is easy to drop under momentum; check it explicitly before posting.
 - Push, then reply in-thread (not a new top-level comment) to each finding's original
   comment via the review-comment reply endpoint, citing the fixing commit SHA.
-- Trigger a fresh review (e.g. `@codex review`) once all replies are posted.
+- **Resolve the review thread** for each finding just replied to, using the GraphQL
+  `resolveReviewThread` mutation (`gh api graphql -f query='mutation {
+  resolveReviewThread(input: {threadId: "<thread-node-id>"}) { thread { isResolved } }
+  }'`; get `threadId` from the `reviewThreads` query in the status-check step). This is
+  a separate, easy-to-forget step from posting the reply — the REST reply endpoint has
+  no effect on thread resolution, so without explicitly calling this mutation every
+  thread stays `isResolved: false` indefinitely, even after being fixed, replied to,
+  and re-reviewed clean (confirmed on a real merged PR: every one of 14 fixed,
+  replied-to threads still read `isResolved: false`, because this step was never
+  performed). Doing this keeps the PR's GitHub UI reflecting reality — reviewers
+  scanning the "Files changed" tab see addressed items collapsed rather than a wall of
+  comments that all still look open — without changing how this skill itself detects
+  "unresolved" (still the has-a-reply-yet check from the status-check step, not
+  `isResolved`, since resolving is a deliberate human/agent action that can be skipped
+  or delayed, not an automatic consequence of fixing something).
+- Trigger a fresh review (e.g. `@codex review`) once all replies are posted and threads
+  resolved.
 
 ### Loop termination
 

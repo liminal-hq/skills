@@ -76,3 +76,31 @@
   checking the selected comment's `id`/`created_at` actually matches the true latest
   comment across the full PR, not merely the last item of whichever page `gh api`
   happened to process last.
+
+## Scenario 11: Latest-comment selection ignores non-bot comments
+
+- Preconditions: a PR where the reviewing bot posted a clean summary, and a human
+  (or another bot/status integration) posted a comment afterward.
+- Expectation: the "latest review comment" selection filters to the reviewing bot's
+  login before taking the last item, correctly returning the bot's clean summary —
+  not the later human/other-bot comment.
+
+## Scenario 12: Fixed findings don't block on isResolved
+
+- Preconditions: a PR where every finding from a review round has been fixed and
+  replied to in-thread, but the resolve-thread step from "Commit and push" was
+  skipped.
+- Expectation: the status check still correctly reports zero unresolved findings,
+  because "unresolved" is determined by the has-a-reply-yet check (a root comment
+  with no reply), not by `isResolved` — which would incorrectly show every thread as
+  still open in this scenario, confirmed empirically on a real merged PR where this
+  step had never been performed.
+
+## Scenario 13: Threads get resolved after replying
+
+- Preconditions: a finding has just been fixed, verified, and replied to in-thread.
+- Expectation: before requesting a fresh review, the thread's `resolveReviewThread`
+  mutation is called (using the thread's GraphQL node ID), and the thread's
+  `isResolved` field reads `true` afterward — keeping the PR's "Files changed" view
+  uncluttered with addressed items for human reviewers, independent of how this
+  skill's own automation determines "unresolved."

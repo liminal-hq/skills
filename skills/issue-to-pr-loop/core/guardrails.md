@@ -23,8 +23,12 @@
     project-specific gates such as migration/seed round-trips).
 11. Every review finding has an in-thread reply (not a new top-level comment) citing
     the fixing commit and the verification evidence.
-12. A fresh review has been requested after all replies for a round are posted.
-13. Backticks wrap every identifier, path, and command in commit messages and PR
+12. Every replied-to finding's review thread has been explicitly resolved via the
+    `resolveReviewThread` GraphQL mutation — posting a reply does not do this
+    automatically, and it does not happen on its own just because the underlying code
+    was fixed.
+13. A fresh review has been requested after all replies for a round are posted.
+14. Backticks wrap every identifier, path, and command in commit messages and PR
     replies.
 
 ## Safety Rules
@@ -68,6 +72,25 @@
   union of per-page results is still correct — only positional indexing needs the
   full aggregate first. This becomes routine, not an edge case, on any review loop
   that runs more than a few rounds.
+- When selecting "the latest top-level review comment," filter to the codex bot's
+  login (or whatever review bot is in use) before applying positional indexing — the
+  issue-comments endpoint returns every conversation comment on the PR, not just the
+  reviewing bot's, so any later human reply, status comment, or other bot's comment
+  would otherwise be selected instead of the bot's actual last verdict.
+- Disagreeing with a finding requires the same empirical rigor as agreeing with one.
+  A well-reasoned finding can still fail to reproduce in a specific project's actual
+  configuration (confirmed directly: a finding about an unresolvable TypeScript
+  import breaking CI was structurally correct in general, but didn't reproduce in a
+  true fresh-checkout test because the target project already had `skipLibCheck:
+  true`, which happens to suppress that exact error class for declaration files).
+  When a finding doesn't reproduce, say so with the specific evidence (the exact
+  reproduction attempted and its result), not a bare disagreement — and acknowledge
+  explicitly that the underlying reasoning would be a real risk under a different
+  configuration.
+- The `resolveReviewThread` GraphQL mutation requires `pull-requests: write`
+  permission (covered by a personal-access-token's `repo` scope, but not necessarily
+  by a fine-grained PAT or CI service token without that explicit grant) — confirm
+  this is available before relying on the resolve-thread step succeeding silently.
 
 ## Rollback
 
