@@ -58,3 +58,11 @@
   posted).
 - Expectation: no action is taken; the event is recognized as self-authored and not
   treated as new external feedback.
+
+## Scenario 9: Comment pagination on a long review loop
+
+- Preconditions: a PR has accumulated more than 30 review comments (top-level and/or
+  inline) across multiple review rounds.
+- Expectation: status-check `gh api` calls use `--paginate`, so the latest top-level
+  summary comment and all unresolved inline findings are correctly identified — not
+  truncated to the first 30-comment page in ascending order.

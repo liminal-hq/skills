@@ -53,6 +53,13 @@
   end-state — the previous review round's regression check is about *correctness*,
   this one is about *whether the operation is guaranteed to run at all* in the
   target deployment environment.
+- Always pass `--paginate` on `gh api` list calls for PR/issue comments. GitHub's REST
+  API defaults to `per_page=30`/page 1 in ascending order; on a PR that has
+  accumulated more than 30 comments across several review rounds, an unpaginated
+  `.[-1]` returns the 30th *oldest* comment, not the latest — silently treating a
+  stale result as the current review state and potentially missing newer findings
+  entirely. This becomes routine, not an edge case, on any review loop that runs more
+  than a few rounds.
 
 ## Rollback
 

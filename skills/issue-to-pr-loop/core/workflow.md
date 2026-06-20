@@ -63,12 +63,17 @@ Continue or re-enter this loop when:
 ### Status check
 
 1. `gh pr checks <N>` for CI state.
-2. `gh api repos/:owner/:repo/issues/<N>/comments --jq '.[-1]'` for the latest top-level
-   review comment (codex posts a summary comment per pass; "Didn't find any major
-   issues" or a 👍 reaction means clean).
-3. `gh api repos/:owner/:repo/pulls/<N>/comments --jq '.[] | select(.in_reply_to_id == null)'`
+2. `gh api --paginate repos/:owner/:repo/issues/<N>/comments --jq '.[-1]'` for the
+   latest top-level review comment (codex posts a summary comment per pass; "Didn't
+   find any major issues" or a 👍 reaction means clean). **Always pass `--paginate`** —
+   GitHub's REST API defaults to `per_page=30`/page 1 in ascending order, so on a PR
+   with more than 30 top-level comments, `.[-1]` without pagination returns the 30th
+   *oldest* comment, not the latest one, silently treating a stale result as current.
+3. `gh api --paginate repos/:owner/:repo/pulls/<N>/comments --jq '.[] | select(.in_reply_to_id == null)'`
    for unresolved inline findings — cross-check against replies already posted before
-   treating one as new.
+   treating one as new. Same pagination requirement applies once a PR accumulates more
+   than 30 inline review comments across all rounds (routine on a long-running review
+   loop with many fix rounds).
 4. `gh pr view <N> --json mergeable,mergeStateStatus` for merge state.
 
 If the latest top-level comment or inline comment author matches the bot's own GitHub
