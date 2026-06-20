@@ -1,7 +1,7 @@
 skills:
   - name: pr-integration
     path: skills/pr-integration
-    version: 2.6.0
+    version: 2.6.1
     supported_agents:
       - codex
       - claude
@@ -10,3 +10,9 @@ skills:
       - cursor
       - cline
       - gemini-cli
+  - name: issue-to-pr-loop
+    path: skills/issue-to-pr-loop
+    version: 1.0.0
+    supported_agents:
+      - claude
+      - codex

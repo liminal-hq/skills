@@ -1,0 +1,31 @@
+name: issue-to-pr-loop
+description: Drive a tracked issue from investigation through a merge-ready pull request — research and surface real decisions before implementing, verify each piece as it's built, spin off out-of-scope discoveries as new issues, then run repeated rounds of automated review until clean, reproducing every finding before fixing it.
+version: 1.0.0
+owners:
+  - ScottMorris
+supported_agents:
+  - claude
+  - codex
+required_files:
+  - core/intent.md
+  - core/workflow.md
+  - core/guardrails.md
+  - adapters/claude/CLAUDE.md
+  - adapters/codex/CODEX.md
+  - references/reply-template.md
+validation_commands:
+  - gh auth status
+  - git status --short --branch
+required_tools:
+  - gh
+  - git
+optional_tools:
+  - jq
+  - rg
+artefact_paths:
+  - <repo>/issues/<spun-off-issue-number>
+  - <repo>/pulls/<pr-number>
+approval_requirements:
+  - explicit per-PR approval before merge, even after an advance "merge once green" statement
+  - explicit confirmation before rewriting already-pushed commit history
+  - human decision on any genuine architectural choice surfaced during investigation
