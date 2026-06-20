@@ -16,11 +16,12 @@ required_files:
 validation_commands:
   - gh auth status
   - git status --short --branch
+  - jq --version
 required_tools:
   - gh
   - git
-optional_tools:
   - jq
+optional_tools:
   - rg
 artefact_paths:
   - <repo>/issues/<spun-off-issue-number>
