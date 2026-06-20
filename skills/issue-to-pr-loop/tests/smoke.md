@@ -104,3 +104,27 @@
   `isResolved` field reads `true` afterward — keeping the PR's "Files changed" view
   uncluttered with addressed items for human reviewers, independent of how this
   skill's own automation determines "unresolved."
+
+## Scenario 14: Resolving a thread requires the GraphQL thread ID, not a REST ID
+
+- Preconditions: a finding has been fixed and replied to via the REST review-comment
+  reply endpoint; the only IDs on hand so far are from the REST `pulls/<N>/comments`
+  response used in status-check step 3 (a `PullRequestReviewComment` `id`/`node_id`).
+- Expectation: before calling `resolveReviewThread`, the `reviewThreads` GraphQL query
+  (status-check step 4) is run and the finding's root comment is matched to its
+  thread by `databaseId`, yielding the thread's own node `id`. Passing the REST
+  comment's `node_id` directly to `resolveReviewThread`'s `threadId` input is not
+  attempted — it is the wrong GraphQL object type and the mutation would fail.
+
+## Scenario 15: Clean summary predates the latest push
+
+- Preconditions: codex posted a clean "Didn't find any major issues" summary
+  reviewing commit `abc1234`. After that, a new commit `def5678` was pushed (e.g. an
+  unrelated fix prompted by a different inline finding in the same round), and no
+  fresh codex summary has arrived yet by the time of the next status check.
+- Expectation: the status check extracts `abc1234` from the summary's `**Reviewed
+  commit:**` line, compares it against the PR's current `headRefOid` (`def5678`),
+  finds a mismatch, and does **not** treat the PR as codex-clean — CI being green and
+  no new inline findings existing yet does not change this. The loop re-requests
+  review and keeps waiting rather than reporting the PR ready off a stale clean
+  verdict.

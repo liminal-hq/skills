@@ -30,6 +30,17 @@
 13. A fresh review has been requested after all replies for a round are posted.
 14. Backticks wrap every identifier, path, and command in commit messages and PR
     replies.
+15. The `reviewThreads` GraphQL query (status-check step 4 in `workflow.md`) has been
+    run for the current round before attempting any `resolveReviewThread` mutation —
+    the REST `pulls/<N>/comments` endpoint used elsewhere in the status check never
+    returns a usable thread ID, only a `PullRequestReviewComment` ID; passing that to
+    the mutation's `threadId` input fails, since it expects a
+    `PullRequestReviewThread` node ID, a different object type only this query
+    exposes.
+16. Before reporting a PR ready (or treating a clean codex summary as covering the
+    current round), the summary's `**Reviewed commit:** \`<sha>\`` has been compared
+    against the PR's current `headRefOid` — not just checked for the absence of
+    findings.
 
 ## Safety Rules
 
@@ -50,7 +61,12 @@
   it explicitly to the human, rather than silently expanding the current PR's scope.
 - Keep CI-green and codex-clean separate concepts: CI passing does not mean codex has
   reviewed the latest commit; codex being silent does not mean it has finished — check
-  the latest reviewed commit SHA in its summary comment against your last push.
+  the latest reviewed commit SHA in its summary comment (the `**Reviewed commit:**
+  \`<sha>\`` line) against `gh pr view <N> --json headRefOid`, per status-check step 2
+  and the loop-termination criteria in `workflow.md`. A clean summary that predates
+  the current head is not a clean review of the current head — this is exactly the
+  asynchronous-relative-to-push gap the loop must close before reporting ready,
+  not an edge case to assume away.
 - A fix that changes timing/ordering assumptions (fire-and-forget vs. awaited,
   synchronous vs. async dispatch) needs its own explicit verification of the new
   timing behavior, not just a check that the happy path still produces the right

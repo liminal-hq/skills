@@ -81,6 +81,16 @@ Continue or re-enter this loop when:
    treats a stale page-ending comment as current. `--slurp` wraps every page into
    one array first; `gh api` forbids combining `--slurp` with its own `--jq`, so
    aggregate with `--slurp` and filter with an external `jq` instead, as shown above.
+   **A clean summary is only meaningful if it reviewed the current head.** A clean
+   codex summary (e.g. "Codex Review: Didn't find any major issues") names the
+   commit it reviewed in a `**Reviewed commit:** \`<short-sha>\`` line in the comment
+   body. Extract that short SHA and compare it (prefix match) against
+   `gh pr view <N> --json headRefOid -q .headRefOid` — a clean summary for an older
+   commit means nothing has reviewed whatever was pushed since, and the loop must
+   not treat the PR as clean on that basis alone. This matters most right after a
+   push: codex's webhook-triggered review and CI's completion are both typically
+   asynchronous relative to the push, so the most recent comment at the moment of a
+   status check can easily predate the latest commit.
 3. `gh api --paginate --slurp repos/:owner/:repo/pulls/<N>/comments | jq 'add | (map(select(.in_reply_to_id != null)) | map(.in_reply_to_id)) as $repliedTo | map(select(.in_reply_to_id == null and (.id as $id | $repliedTo | index($id) == null)))'`
    for genuinely unresolved inline findings: root review comments (`in_reply_to_id ==
    null`) that have *no reply at all yet*. **Do not use `in_reply_to_id == null` by
@@ -95,7 +105,19 @@ Continue or re-enter this loop when:
    this workflow ever clicks the "Resolve conversation" button; relying on it would
    make every thread look permanently unresolved instead. The
    "has-a-reply-yet" check above is what this skill actually means by "unresolved."
-4. `gh pr view <N> --json mergeable,mergeStateStatus` for merge state.
+4. `gh api graphql -f query='query { repository(owner: ":owner", name: ":repo") {
+   pullRequest(number: <N>) { reviewThreads(first: 100) { nodes { id isResolved
+   comments(first: 1) { nodes { databaseId } } } } } } }'` to map each root review
+   comment's REST `id` (`databaseId` here) to its GraphQL thread node `id`. **This
+   query is required before the resolve-thread mutation in "Commit and push" can run
+   at all** — `resolveReviewThread`'s `threadId` input is a `PullRequestReviewThread`
+   node ID, which only this `reviewThreads` field exposes; the REST `pulls/<N>/comments`
+   endpoint used in step 3 above never returns it, and passing a REST comment's
+   `node_id` (a `PullRequestReviewComment` ID, a different object type) to the
+   mutation fails. Run this once per status check and keep the
+   `databaseId → thread id` mapping on hand for every reply posted in this round; with
+   more than 100 threads, paginate with `reviewThreads(first: 100, after: $cursor)`.
+5. `gh pr view <N> --json mergeable,mergeStateStatus` for merge state.
 
 If the latest top-level comment or inline comment author matches the bot's own GitHub
 identity (an echo of a reply or review-trigger comment just posted), take no action —
@@ -141,7 +163,8 @@ it is not new external feedback.
 - **Resolve the review thread** for each finding just replied to, using the GraphQL
   `resolveReviewThread` mutation (`gh api graphql -f query='mutation {
   resolveReviewThread(input: {threadId: "<thread-node-id>"}) { thread { isResolved } }
-  }'`; get `threadId` from the `reviewThreads` query in the status-check step). This is
+  }'`; get `threadId` from the `reviewThreads` query in status-check step 4 above,
+  matched to this finding's comment by `databaseId`). This is
   a separate, easy-to-forget step from posting the reply — the REST reply endpoint has
   no effect on thread resolution, so without explicitly calling this mutation every
   thread stays `isResolved: false` indefinitely, even after being fixed, replied to,
@@ -163,7 +186,10 @@ Repeat the status check → per-finding sequence → commit/push cycle until:
 - CI is fully green (or red only for a pre-existing, separately-tracked, out-of-scope
   reason that has been explicitly called out to the human, e.g. via a filed issue from
   Phase 1/4 step 3).
-- The latest top-level review comment reports no findings.
+- The latest top-level review comment reports no findings, **and its `Reviewed
+  commit` SHA matches the PR's current `headRefOid`** — a clean summary for a
+  commit older than the latest push does not satisfy this; re-request review and
+  keep looping instead of reporting ready.
 - No unresolved inline threads remain.
 
 At that point, report the PR as ready. Do not merge. A prior statement like "merge it
