@@ -53,13 +53,21 @@
   end-state — the previous review round's regression check is about *correctness*,
   this one is about *whether the operation is guaranteed to run at all* in the
   target deployment environment.
-- Always pass `--paginate` on `gh api` list calls for PR/issue comments. GitHub's REST
-  API defaults to `per_page=30`/page 1 in ascending order; on a PR that has
-  accumulated more than 30 comments across several review rounds, an unpaginated
-  `.[-1]` returns the 30th *oldest* comment, not the latest — silently treating a
-  stale result as the current review state and potentially missing newer findings
-  entirely. This becomes routine, not an edge case, on any review loop that runs more
-  than a few rounds.
+- Always pass `--paginate` on `gh api` list calls for PR/issue comments, and when
+  selecting a single item by position (e.g. `.[-1]` for "the latest comment"), use
+  `--paginate --slurp` piped to an external `jq 'add | ...'` rather than `gh api`'s own
+  `--jq` flag. GitHub's REST API defaults to `per_page=30`/page 1 in ascending order,
+  so an unpaginated call returns the 30th *oldest* comment via `.[-1]`, not the
+  latest. `--paginate` alone is not sufficient either: `gh api`'s `--jq` runs once per
+  page, not once over the combined result, so `--paginate --jq '.[-1]'` across N pages
+  prints N separate "last comments" — reading the wrong one (e.g. the first line) is
+  an easy mistake that silently treats a stale page-ending comment as current.
+  `--slurp` aggregates all pages into one array first, but `gh api` forbids combining
+  `--slurp` with its own `--jq`, hence the external-`jq` pipe. Position-independent
+  filters (`select(...)`) are safe to apply per-page without aggregation, since the
+  union of per-page results is still correct — only positional indexing needs the
+  full aggregate first. This becomes routine, not an edge case, on any review loop
+  that runs more than a few rounds.
 
 ## Rollback
 

@@ -63,17 +63,26 @@ Continue or re-enter this loop when:
 ### Status check
 
 1. `gh pr checks <N>` for CI state.
-2. `gh api --paginate repos/:owner/:repo/issues/<N>/comments --jq '.[-1]'` for the
-   latest top-level review comment (codex posts a summary comment per pass; "Didn't
-   find any major issues" or a 👍 reaction means clean). **Always pass `--paginate`** —
+2. `gh api --paginate --slurp repos/:owner/:repo/issues/<N>/comments | jq 'add | .[-1]'`
+   for the latest top-level review comment (codex posts a summary comment per pass;
+   "Didn't find any major issues" or a 👍 reaction means clean). **Always pass
+   `--paginate`, and pipe through external `jq` rather than `gh api`'s own `--jq`** —
    GitHub's REST API defaults to `per_page=30`/page 1 in ascending order, so on a PR
-   with more than 30 top-level comments, `.[-1]` without pagination returns the 30th
-   *oldest* comment, not the latest one, silently treating a stale result as current.
-3. `gh api --paginate repos/:owner/:repo/pulls/<N>/comments --jq '.[] | select(.in_reply_to_id == null)'`
+   with more than 30 top-level comments an unpaginated call returns the 30th *oldest*
+   comment via `.[-1]`, not the latest one. `--paginate` alone doesn't fix this either:
+   `gh api`'s own `--jq` flag is documented to run once *per page*, not once over the
+   combined result, so `--paginate --jq '.[-1]'` across N pages prints N separate
+   "last comments," one per page — picking the wrong one (e.g. by reading only the
+   first line) silently treats a stale page-ending comment as current. `--slurp`
+   wraps every page into one array first; `gh api` forbids combining `--slurp` with
+   its own `--jq`, so aggregate with `--slurp` and filter with an external `jq`
+   instead, as shown above.
+3. `gh api --paginate --slurp repos/:owner/:repo/pulls/<N>/comments | jq 'add | .[] | select(.in_reply_to_id == null)'`
    for unresolved inline findings — cross-check against replies already posted before
-   treating one as new. Same pagination requirement applies once a PR accumulates more
-   than 30 inline review comments across all rounds (routine on a long-running review
-   loop with many fix rounds).
+   treating one as new. The `select(...)` filter itself is safe to run per-page (the
+   union of per-page filtered results is still correct, unlike a `.[-1]` index), but
+   use the same `--slurp` + external `jq` form for consistency and because some
+   downstream processing (counting, deduplication) may need the full combined array.
 4. `gh pr view <N> --json mergeable,mergeStateStatus` for merge state.
 
 If the latest top-level comment or inline comment author matches the bot's own GitHub

@@ -62,7 +62,17 @@
 ## Scenario 9: Comment pagination on a long review loop
 
 - Preconditions: a PR has accumulated more than 30 review comments (top-level and/or
-  inline) across multiple review rounds.
-- Expectation: status-check `gh api` calls use `--paginate`, so the latest top-level
-  summary comment and all unresolved inline findings are correctly identified — not
-  truncated to the first 30-comment page in ascending order.
+  inline) across multiple review rounds, spanning more than one API page.
+- Expectation: the latest top-level summary comment and all unresolved inline
+  findings are correctly identified across every page — not truncated to the first
+  30-comment page in ascending order.
+
+## Scenario 10: Selecting the latest comment across multiple pages
+
+- Preconditions: same multi-page PR as Scenario 9, specifically selecting "the latest
+  top-level comment" by position (`.[-1]`-style logic).
+- Expectation: the selection uses `--paginate --slurp` aggregated through an external
+  `jq 'add | .[-1]'`, not `gh api`'s own `--jq` flag with `--paginate` — confirmed by
+  checking the selected comment's `id`/`created_at` actually matches the true latest
+  comment across the full PR, not merely the last item of whichever page `gh api`
+  happened to process last.
