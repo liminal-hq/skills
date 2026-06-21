@@ -98,20 +98,31 @@ directory's, substitute the real `owner/repo` directly instead.
    push: codex's webhook-triggered review and CI's completion are both typically
    asynchronous relative to the push, so the most recent comment at the moment of a
    status check can easily predate the latest commit.
-3. `gh api --paginate --slurp repos/{owner}/{repo}/pulls/<N>/comments | jq 'add | (map(select(.in_reply_to_id != null)) | map(.in_reply_to_id)) as $repliedTo | map(select(.in_reply_to_id == null and (.id as $id | $repliedTo | index($id) == null)))'`
+3. `gh api user -q .login` to get the acting identity (the account `gh` is authenticated
+   as — there is no separate bot account in this workflow; the agent posts replies
+   under the human's own GitHub login). Then
+   `gh api --paginate --slurp repos/{owner}/{repo}/pulls/<N>/comments | jq --arg actor "<login>" 'add | (map(select(.in_reply_to_id != null and .user.login == $actor)) | map(.in_reply_to_id)) as $fixedAndReplied | map(select(.in_reply_to_id == null and (.id as $id | $fixedAndReplied | index($id) == null)))'`
    for genuinely unresolved inline findings: root review comments (`in_reply_to_id ==
-   null`) that have *no reply at all yet*. **Do not use `in_reply_to_id == null` by
-   itself as "unresolved"** — that only means the comment isn't itself a reply, not
-   that nobody has replied to it; once a finding has been fixed and replied to in
-   the same round, it is still a root comment forever and would keep being treated
-   as a blocker, preventing the loop from ever reaching "no unresolved threads."
-   GitHub's review-thread resolution state (`isResolved` via the GraphQL
-   `reviewThreads` field) is not a usable substitute either — confirmed empirically
-   on a real merged PR that every thread, including ones fixed, replied to, and
-   re-reviewed clean by codex, still read `isResolved: false`, because nobody in
-   this workflow ever clicks the "Resolve conversation" button; relying on it would
-   make every thread look permanently unresolved instead. The
-   "has-a-reply-yet" check above is what this skill actually means by "unresolved."
+   null`) that have *no reply from the acting agent itself* yet. **Do not treat "any
+   reply exists" as resolution** — a human's clarifying question, codex's own
+   follow-up, or another bot's comment all carry `in_reply_to_id` pointing at the
+   root finding, and would incorrectly clear it before a fixing commit and
+   verification reply ever exist if the filter doesn't check *who* replied
+   (confirmed: a root comment replied to only by codex itself, with no agent reply,
+   is correctly still flagged unresolved by the `$actor`-filtered query above, but
+   would be incorrectly cleared by a filter that accepted any reply). **Do not use
+   `in_reply_to_id == null` by itself as "unresolved"** either — that only means the
+   comment isn't itself a reply, not that nobody has replied to it; once a finding
+   has been fixed and replied to by the agent in the same round, it is still a root
+   comment forever and would keep being treated as a blocker, preventing the loop
+   from ever reaching "no unresolved threads." GitHub's review-thread resolution
+   state (`isResolved` via the GraphQL `reviewThreads` field) is not a usable
+   substitute either — confirmed empirically on a real merged PR that every thread,
+   including ones fixed, replied to, and re-reviewed clean by codex, still read
+   `isResolved: false`, because nobody in this workflow ever clicks the "Resolve
+   conversation" button; relying on it would make every thread look permanently
+   unresolved instead. The "has-a-reply-from-the-agent-yet" check above is what this
+   skill actually means by "unresolved."
 4. `gh api graphql -f query='query($owner: String!, $name: String!, $number: Int!) {
    repository(owner: $owner, name: $name) { pullRequest(number: $number) {
    reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes {
@@ -132,9 +143,19 @@ directory's, substitute the real `owner/repo` directly instead.
    more than 100 threads, paginate with `reviewThreads(first: 100, after: $cursor)`.
 5. `gh pr view <N> --json mergeable,mergeStateStatus` for merge state.
 
-If the latest top-level comment or inline comment author matches the bot's own GitHub
-identity (an echo of a reply or review-trigger comment just posted), take no action —
-it is not new external feedback.
+**Echo suppression applies to the specific event that triggered this status check,
+not to whichever comment currently happens to be latest in either stream.** If a
+webhook/comment event arrived and its author matches the agent's own GitHub
+identity (an echo of a reply or review-trigger comment just posted), take no action
+for *that event* — it is not new external feedback. Do not generalize this into "if
+the latest top-level or inline comment is self-authored, skip the whole status
+check": after replying to several findings in a round, the latest *inline* comment
+is routinely the agent's own reply while the loop waits for a fresh codex pass — a
+later, genuinely external top-level codex summary or CI-failure event must still be
+acted on in that case, not ignored just because the inline stream's latest item
+happens to be self-authored. When entering via a scheduled check-in or a direct
+"check on PR <N>" request rather than a specific webhook event, there is no single
+triggering event to gate on — run the full status check unconditionally.
 
 ### Per-finding sequence
 
@@ -186,9 +207,9 @@ it is not new external feedback.
   performed). Doing this keeps the PR's GitHub UI reflecting reality — reviewers
   scanning the "Files changed" tab see addressed items collapsed rather than a wall of
   comments that all still look open — without changing how this skill itself detects
-  "unresolved" (still the has-a-reply-yet check from the status-check step, not
-  `isResolved`, since resolving is a deliberate human/agent action that can be skipped
-  or delayed, not an automatic consequence of fixing something).
+  "unresolved" (still the has-a-reply-from-the-agent-yet check from the status-check
+  step, not `isResolved`, since resolving is a deliberate human/agent action that can
+  be skipped or delayed, not an automatic consequence of fixing something).
 - Trigger a fresh review (e.g. `@codex review`) once all replies are posted and threads
   resolved.
 

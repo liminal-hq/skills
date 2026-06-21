@@ -142,3 +142,28 @@
   string at all (confirmed via a direct repro returning `Could not resolve to a
   Repository with the name '{owner}/{repo}'`); the real owner/repo are passed as
   GraphQL variables via `-f`/`-F` instead.
+
+## Scenario 17: A non-agent reply does not clear a finding
+
+- Preconditions: a codex finding's root comment has exactly one reply, and that
+  reply is from a human asking a clarifying question (or from codex itself
+  following up), not from the acting agent confirming a fix.
+- Expectation: the status check's unresolved-findings query, filtered to the
+  acting agent's own login (`gh api user -q .login`), still reports this root
+  comment as unresolved — confirmed directly: a root comment replied to only by
+  `chatgpt-codex-connector[bot]` is correctly still flagged by the
+  `$actor`-filtered query, where an unfiltered "any reply exists" query would
+  have incorrectly cleared it. The loop does not skip reproducing/fixing this
+  finding on the basis of that reply.
+
+## Scenario 18: Echo suppression doesn't stall an external event
+
+- Preconditions: the agent has just replied to several findings in a round, so the
+  latest *inline* review comment on the PR is the agent's own reply. A genuinely
+  new, external event then arrives — e.g. a fresh top-level codex summary
+  reporting new findings, or a CI-failure webhook.
+- Expectation: the status check still acts on the new external event. Echo
+  suppression is evaluated against the specific triggering event's author, not
+  against "is the latest item in the inline (or top-level) stream self-authored" —
+  the latter would incorrectly skip the entire status check merely because the
+  agent's own prior reply happens to currently be the latest inline comment.
