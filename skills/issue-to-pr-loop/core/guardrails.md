@@ -107,6 +107,13 @@
   permission (covered by a personal-access-token's `repo` scope, but not necessarily
   by a fine-grained PAT or CI service token without that explicit grant) — confirm
   this is available before relying on the resolve-thread step succeeding silently.
+- `gh api` only substitutes `{owner}`, `{repo}`, and `{branch}` in REST endpoint
+  paths — never Octokit-style `:owner`/`:repo` colon placeholders, which are sent
+  through literally and 404 (confirmed directly: `gh api repos/:owner/:repo/pulls/<N>`
+  returns `404 Not Found`). This substitution also does not apply inside a GraphQL
+  query string at all (`gh api graphql -f query='...{owner}...'` sends the literal
+  text `{owner}` to GitHub and fails to resolve, confirmed directly) — pass the real
+  owner/repo as GraphQL variables via `-f`/`-F` for GraphQL calls instead.
 
 ## Rollback
 

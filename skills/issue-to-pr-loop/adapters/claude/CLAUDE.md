@@ -14,9 +14,10 @@ Follow these canonical documents:
 - Use `gh issue create` for spinning off out-of-scope discoveries; check
   `gh label list`/`gh issue list --search` first so the new issue uses existing labels
   and doesn't duplicate something already tracked.
-- Use `gh api repos/:owner/:repo/pulls/<N>/comments/<id>/replies` for in-thread review
-  replies, not `gh pr comment`, which posts a new top-level comment instead of a
-  threaded reply.
+- Use `gh api repos/{owner}/{repo}/pulls/<N>/comments/<id>/replies` for in-thread
+  review replies, not `gh pr comment`, which posts a new top-level comment instead of
+  a threaded reply. `gh api` only substitutes the literal `{owner}`/`{repo}`/`{branch}`
+  placeholders in REST endpoint paths — not Octokit-style `:owner`/`:repo`.
 - Use the `ScheduleWakeup` tool (or equivalent scheduling primitive) for the fallback
   check-in cadence described in `../../core/workflow.md` — short (3-5 min) while
   actively waiting on a review pass in the current turn, long (~1 hour) as the webhook

@@ -128,3 +128,17 @@
   no new inline findings existing yet does not change this. The loop re-requests
   review and keeps waiting rather than reporting the PR ready off a stale clean
   verdict.
+
+## Scenario 16: `gh api` placeholder substitution
+
+- Preconditions: an agent runs any `gh api repos/...` call from the status-check or
+  per-finding sequence, either against the current directory's repository or an
+  explicitly different one.
+- Expectation: the endpoint path uses `{owner}`/`{repo}` (the only placeholders `gh
+  api` substitutes, confirmed via `gh help api` and a direct repro: `gh api
+  repos/:owner/:repo/pulls/<N>` 404s, since `:owner`/`:repo` are sent as literal path
+  segments) — never Octokit-style `:owner`/`:repo`. For GraphQL calls (`gh api
+  graphql -f query=...`), `{owner}`/`{repo}` are not substituted inside the query
+  string at all (confirmed via a direct repro returning `Could not resolve to a
+  Repository with the name '{owner}/{repo}'`); the real owner/repo are passed as
+  GraphQL variables via `-f`/`-F` instead.

@@ -62,8 +62,15 @@ Continue or re-enter this loop when:
 
 ### Status check
 
+**`gh api` only substitutes the literal placeholders `{owner}`, `{repo}`, and
+`{branch}`** (populated from the current directory's repository, or `GH_REPO`) —
+Octokit-style `:owner`/`:repo` colon placeholders are sent through unchanged and
+404, since `gh api` has no special handling for them. Every `gh api repos/...` call
+below uses `{owner}`/`{repo}`; if running against a repo other than the current
+directory's, substitute the real `owner/repo` directly instead.
+
 1. `gh pr checks <N>` for CI state.
-2. `gh api --paginate --slurp repos/:owner/:repo/issues/<N>/comments | jq 'add | map(select(.user.login == "chatgpt-codex-connector[bot]")) | .[-1]'`
+2. `gh api --paginate --slurp repos/{owner}/{repo}/issues/<N>/comments | jq 'add | map(select(.user.login == "chatgpt-codex-connector[bot]")) | .[-1]'`
    for the latest *codex* review summary (codex posts a summary comment per pass;
    "Didn't find any major issues" or a 👍 reaction means clean). **Filter to the
    codex bot's login before selecting `.[-1]`** — the issue-comments endpoint returns
@@ -91,7 +98,7 @@ Continue or re-enter this loop when:
    push: codex's webhook-triggered review and CI's completion are both typically
    asynchronous relative to the push, so the most recent comment at the moment of a
    status check can easily predate the latest commit.
-3. `gh api --paginate --slurp repos/:owner/:repo/pulls/<N>/comments | jq 'add | (map(select(.in_reply_to_id != null)) | map(.in_reply_to_id)) as $repliedTo | map(select(.in_reply_to_id == null and (.id as $id | $repliedTo | index($id) == null)))'`
+3. `gh api --paginate --slurp repos/{owner}/{repo}/pulls/<N>/comments | jq 'add | (map(select(.in_reply_to_id != null)) | map(.in_reply_to_id)) as $repliedTo | map(select(.in_reply_to_id == null and (.id as $id | $repliedTo | index($id) == null)))'`
    for genuinely unresolved inline findings: root review comments (`in_reply_to_id ==
    null`) that have *no reply at all yet*. **Do not use `in_reply_to_id == null` by
    itself as "unresolved"** — that only means the comment isn't itself a reply, not
@@ -105,10 +112,16 @@ Continue or re-enter this loop when:
    this workflow ever clicks the "Resolve conversation" button; relying on it would
    make every thread look permanently unresolved instead. The
    "has-a-reply-yet" check above is what this skill actually means by "unresolved."
-4. `gh api graphql -f query='query { repository(owner: ":owner", name: ":repo") {
-   pullRequest(number: <N>) { reviewThreads(first: 100) { nodes { id isResolved
-   comments(first: 1) { nodes { databaseId } } } } } } }'` to map each root review
-   comment's REST `id` (`databaseId` here) to its GraphQL thread node `id`. **This
+4. `gh api graphql -f query='query($owner: String!, $name: String!, $number: Int!) {
+   repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+   reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes {
+   databaseId } } } } } } }' -f owner=<owner> -f name=<repo> -F number=<N>` to map
+   each root review comment's REST `id` (`databaseId` here) to its GraphQL thread
+   node `id`. **`{owner}`/`{repo}` endpoint-path placeholders do not work inside a
+   GraphQL query string** — `gh api` only substitutes them in REST endpoint paths
+   (confirmed: a literal `"{owner}"` string inside a `-f query=...` GraphQL document
+   is sent to GitHub as the literal text `{owner}` and fails to resolve); pass the
+   real owner/repo as GraphQL variables via `-f`/`-F` instead, as shown. **This
    query is required before the resolve-thread mutation in "Commit and push" can run
    at all** — `resolveReviewThread`'s `threadId` input is a `PullRequestReviewThread`
    node ID, which only this `reviewThreads` field exposes; the REST `pulls/<N>/comments`
