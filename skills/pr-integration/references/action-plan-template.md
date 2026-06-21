@@ -114,7 +114,7 @@ For each open PR in the stack:
 
 For each open PR in the stack:
 
-1. Title starts with a capital letter.
+1. Title may start with one or more emoji prefixes, but the first non-emoji word starts with a capital letter.
 2. Title does not use Conventional Commit prefixes (for example, no `feat:`, `fix:`, `chore:`).
 3. Title describes outcome or behaviour change.
 4. Title style is consistent across the open stack.
