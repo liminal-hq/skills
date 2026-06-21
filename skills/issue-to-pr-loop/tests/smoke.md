@@ -156,6 +156,20 @@
   have incorrectly cleared it. The loop does not skip reproducing/fixing this
   finding on the basis of that reply.
 
+## Scenario 18a: A later non-agent reply reopens a finding
+
+- Preconditions: a codex finding's root comment has two replies in order: first
+  the agent's fix-reply citing a commit, then a later reply from codex (or a
+  human reviewer) saying the fix is still insufficient.
+- Expectation: the status check's unresolved-findings query reports this root
+  comment as unresolved again, because it checks the **latest** reply's author,
+  not merely whether the agent has replied at any point in the thread — confirmed
+  directly with a synthetic three-comment thread (root → agent's fix-reply →
+  codex's later "still not fixed" reply): the latest-reply-by-`created_at` check
+  correctly flags it unresolved, where a check that only asked "has the agent
+  ever replied to this root" would have incorrectly left it cleared. The loop
+  re-investigates this finding rather than reporting the PR ready.
+
 ## Scenario 18: Echo suppression doesn't stall an external event
 
 - Preconditions: the agent has just replied to several findings in a round, so the

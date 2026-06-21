@@ -41,10 +41,14 @@
     current round), the summary's `**Reviewed commit:** \`<sha>\`` has been compared
     against the PR's current `headRefOid` — not just checked for the absence of
     findings.
-17. The "unresolved inline findings" check filters replies to the acting agent's own
-    login (`gh api user -q .login`), not "any reply exists" — a human's clarifying
-    question or a bot's follow-up comment also carries `in_reply_to_id` and must not
-    be mistaken for a posted fix.
+17. The "unresolved inline findings" check requires the **latest** reply on a root
+    comment (by `created_at`) to be from the acting agent's own login (`gh api user
+    -q .login`) — not "any reply exists" and not "the agent has replied at some
+    point." A human's clarifying question or a bot's follow-up comment also carries
+    `in_reply_to_id` and must not be mistaken for a posted fix; a later reviewer
+    reply *after* the agent's fix-reply (e.g. "still insufficient") reopens the
+    finding and must not stay treated as resolved just because the agent replied
+    earlier in the thread.
 18. Echo suppression (skipping a webhook event because its author is the agent's own
     identity) is applied to the specific triggering event, never to "whichever
     comment is currently latest in the top-level or inline stream" — the latter

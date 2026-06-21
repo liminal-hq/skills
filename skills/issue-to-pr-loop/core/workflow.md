@@ -101,28 +101,34 @@ directory's, substitute the real `owner/repo` directly instead.
 3. `gh api user -q .login` to get the acting identity (the account `gh` is authenticated
    as — there is no separate bot account in this workflow; the agent posts replies
    under the human's own GitHub login). Then
-   `gh api --paginate --slurp repos/{owner}/{repo}/pulls/<N>/comments | jq --arg actor "<login>" 'add | (map(select(.in_reply_to_id != null and .user.login == $actor)) | map(.in_reply_to_id)) as $fixedAndReplied | map(select(.in_reply_to_id == null and (.id as $id | $fixedAndReplied | index($id) == null)))'`
-   for genuinely unresolved inline findings: root review comments (`in_reply_to_id ==
-   null`) that have *no reply from the acting agent itself* yet. **Do not treat "any
-   reply exists" as resolution** — a human's clarifying question, codex's own
-   follow-up, or another bot's comment all carry `in_reply_to_id` pointing at the
-   root finding, and would incorrectly clear it before a fixing commit and
-   verification reply ever exist if the filter doesn't check *who* replied
-   (confirmed: a root comment replied to only by codex itself, with no agent reply,
-   is correctly still flagged unresolved by the `$actor`-filtered query above, but
-   would be incorrectly cleared by a filter that accepted any reply). **Do not use
-   `in_reply_to_id == null` by itself as "unresolved"** either — that only means the
-   comment isn't itself a reply, not that nobody has replied to it; once a finding
-   has been fixed and replied to by the agent in the same round, it is still a root
-   comment forever and would keep being treated as a blocker, preventing the loop
-   from ever reaching "no unresolved threads." GitHub's review-thread resolution
-   state (`isResolved` via the GraphQL `reviewThreads` field) is not a usable
-   substitute either — confirmed empirically on a real merged PR that every thread,
-   including ones fixed, replied to, and re-reviewed clean by codex, still read
-   `isResolved: false`, because nobody in this workflow ever clicks the "Resolve
-   conversation" button; relying on it would make every thread look permanently
-   unresolved instead. The "has-a-reply-from-the-agent-yet" check above is what this
-   skill actually means by "unresolved."
+   `gh api --paginate --slurp repos/{owner}/{repo}/pulls/<N>/comments | jq --arg actor "<login>" 'add as $all | ($all | map(select(.in_reply_to_id == null))) as $roots | $roots | map(. as $root | ($all | map(select(.in_reply_to_id == $root.id)) | sort_by(.created_at) | last) as $lastReply | select($lastReply == null or $lastReply.user.login != $actor))'`
+   for genuinely unresolved inline findings: root review comments whose **latest**
+   reply (by `created_at`) is not from the acting agent — including roots with no
+   reply at all. **Do not treat "any reply from the agent exists" as resolution** —
+   a reviewer (human or codex) can reply again *after* the agent's fix-reply, e.g.
+   "this is still insufficient, see X," reopening the finding; checking only whether
+   the agent has *ever* replied would keep treating that root as resolved forever
+   (confirmed with a synthetic three-comment thread: root → agent's fix-reply →
+   codex's later "still not fixed" reply — the latest-reply-by-time check correctly
+   flags this as unresolved again, where an "agent has replied at some point" check
+   would not). **Do not treat "any reply exists" as resolution** either — a human's
+   clarifying question, codex's own follow-up, or another bot's comment all carry
+   `in_reply_to_id` pointing at the root finding, and would incorrectly clear it
+   before a fixing commit and verification reply ever exist if the filter doesn't
+   check *who* posted the latest one (confirmed: a root comment replied to only by
+   codex itself, with no agent reply, is correctly still flagged unresolved). **Do
+   not use `in_reply_to_id == null` by itself as "unresolved"** either — that only
+   means the comment isn't itself a reply, not that nobody has replied to it; once a
+   finding has been fixed and replied to by the agent with no later reopening, it is
+   still a root comment forever and would keep being treated as a blocker if checked
+   in isolation, preventing the loop from ever reaching "no unresolved threads."
+   GitHub's review-thread resolution state (`isResolved` via the GraphQL
+   `reviewThreads` field) is not a usable substitute either — confirmed empirically
+   on a real merged PR that every thread, including ones fixed, replied to, and
+   re-reviewed clean by codex, still read `isResolved: false`, because nobody in
+   this workflow ever clicks the "Resolve conversation" button; relying on it would
+   make every thread look permanently unresolved instead. The "latest reply is from
+   the agent" check above is what this skill actually means by "unresolved."
 4. `gh api graphql -f query='query($owner: String!, $name: String!, $number: Int!) {
    repository(owner: $owner, name: $name) { pullRequest(number: $number) {
    reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes {
@@ -207,7 +213,7 @@ triggering event to gate on — run the full status check unconditionally.
   performed). Doing this keeps the PR's GitHub UI reflecting reality — reviewers
   scanning the "Files changed" tab see addressed items collapsed rather than a wall of
   comments that all still look open — without changing how this skill itself detects
-  "unresolved" (still the has-a-reply-from-the-agent-yet check from the status-check
+  "unresolved" (still the latest-reply-is-from-the-agent check from the status-check
   step, not `isResolved`, since resolving is a deliberate human/agent action that can
   be skipped or delayed, not an automatic consequence of fixing something).
 - Trigger a fresh review (e.g. `@codex review`) once all replies are posted and threads
